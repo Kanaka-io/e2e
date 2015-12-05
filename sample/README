@@ -1,4 +1,2 @@
-This is your new Play application
-=================================
 
-This file will be packaged with your application, when using `activator dist`.
+To find the missing translations, in sbt, do `show checkI18N`
