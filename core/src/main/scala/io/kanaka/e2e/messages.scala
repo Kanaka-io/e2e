@@ -8,11 +8,11 @@ case class OutputConfiguration(applicationId: Long, out: FileWriter)
 
 trait MessagesBackend { self: Singleton =>
 
-  def materializeCall(c: blackbox.Context)(parameter: c.Expr[String]): c.Tree
+  def materializeCall(c: blackbox.Context)(key: c.Expr[String], parameters: c.Expr[Any]*): c.Tree
 
-  def impl(c: blackbox.Context)(key: c.Expr[String]): c.Tree = {
-    extractValue(c)(key).foreach(recordUsage(c))
-    materializeCall(c)(key)
+  def impl(c: blackbox.Context)(key: c.Expr[String], parameters: c.Expr[Any]*): c.Tree = {
+    extractValue(c)(key).foreach(recordUsage(c)(_ ,parameters.size))
+    materializeCall(c)(key, parameters:_*)
   }
 
   def extractValue(c: blackbox.Context)(expr: c.Expr[String]): Option[String] = {
@@ -24,6 +24,13 @@ trait MessagesBackend { self: Singleton =>
         c.warning(expr.tree.pos, "Non-literal message keys are not managed by e2e.")
         None
     }
+  }
+
+  def recordUsage(c: blackbox.Context)(key: String, nbParameters: Int): Unit = {
+    val pos = c.macroApplication.pos
+    val OutputConfiguration(applicationId, out) = configureOutput(c)
+    out.write(s"$applicationId;${pos.source.path};$key;${pos.line};$nbParameters\n")
+    out.flush()
   }
 
   def configureOutput(c: blackbox.Context): OutputConfiguration = {
@@ -41,13 +48,6 @@ trait MessagesBackend { self: Singleton =>
       updateAttachment(sym, config)
       config
     }
-  }
-
-  def recordUsage(c: blackbox.Context)(key: String): Unit = {
-    val pos = c.macroApplication.pos
-    val OutputConfiguration(applicationId, out) = configureOutput(c)
-    out.write(s"$applicationId;${pos.source.path};$key;${pos.line};\n")
-    out.flush()
   }
 }
 

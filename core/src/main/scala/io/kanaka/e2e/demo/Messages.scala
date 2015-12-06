@@ -9,12 +9,12 @@ import scala.language.experimental.macros
   * @author Valentin Kasas
   */
 object Messages extends MessagesBackend {
-  override def materializeCall(c: blackbox.Context)(parameter: c.Expr[String]): c.Tree = {
+  override def materializeCall(c: blackbox.Context)(key: c.Expr[String], parameters: c.Expr[Any]*): c.Tree = {
     import c.universe._
 
-    q""""Label for " + $parameter"""
+    q""""Label for " + $key """
   }
 
-  def apply(key: String): String = macro impl
+  def apply(key: String, parameters: Any*): String = macro impl
 
 }

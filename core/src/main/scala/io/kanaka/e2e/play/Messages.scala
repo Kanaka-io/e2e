@@ -10,12 +10,14 @@ import scala.language.experimental.macros
   * @author Valentin Kasas
   */
 object Messages extends MessagesBackend {
-  override def materializeCall(c: blackbox.Context)(parameter: c.Expr[String]): c.Tree = {
+  override def materializeCall(c: blackbox.Context)(key: c.Expr[String], parameters: c.Expr[Any]*): c.Tree = {
     import c.universe._
 
-    q"""play.api.i18n.Messages($parameter)"""
+    val tree = q"""play.api.i18n.Messages($key, ..$parameters)"""
+    println(tree)
+    tree
   }
 
-  def apply(key: String): String = macro impl
+  def apply(key: String, parameters: Any*): String = macro impl
 
 }
