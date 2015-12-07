@@ -59,7 +59,7 @@ use of `checkI18N`.
 
 Here is what a fixing session looks like when run on the `sample` project in this repository
 
-![Example session](http://i.imgur.com/wiXmtuI.png)
+![Example session](http://i.imgur.com/ewjGM9p.gif)
 
 ## Caveats
 
