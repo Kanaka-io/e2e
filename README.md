@@ -35,27 +35,27 @@ $ > sbt publishLocal
 
 Next you'll have to add the plugin to your project, by adding the following line to your `project/plugins.sbt` :
 
-```
+```scala
 addSbtPlugin("io.kanaka" % "e2e-plugin"  % "0.1-SNAPSHOT")
 ```
 
 Finally, you will need to replace `play.api.i18n.Messages` by `io.kanaka.e2e.play.Messages` wherever it is used. 
 This is basically achieved by replacing this kind of import :
 
-```
+```scala
 import play.api.i18n.{Messages, I18nSupport, MessagesApi}
 ```
 
 by
 
-```
+```scala
 import play.api.i18n.{I18nSupport, MessagesApi}
 import io.kanaka.e2e.play.Messages
 ```
 
 Now you're ready to check and fix your translation files. The plugin provides your project with a new sbt task `checkI18N`.
 The task will allow you to interactively fix the detected problems (you may have to `clean` your project before the first 
-use of `checkI18N`.
+use of `checkI18N`).
 
 Here is what a fixing session looks like when run on the `sample` project in this repository
 
@@ -66,7 +66,7 @@ Here is what a fixing session looks like when run on the `sample` project in thi
 e2e is only capable of verifying keys whose value is statically known, i.e. string literals.
 In other words, you can write :
 
-```
+```scala
 Messages(s"display.name.$variable")
 ```
 
