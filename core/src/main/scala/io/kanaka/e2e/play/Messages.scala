@@ -13,9 +13,7 @@ object Messages extends MessagesBackend {
   override def materializeCall(c: blackbox.Context)(key: c.Expr[String], parameters: c.Expr[Any]*): c.Tree = {
     import c.universe._
 
-    val tree = q"""play.api.i18n.Messages($key, ..$parameters)"""
-    println(tree)
-    tree
+    q"""play.api.i18n.Messages($key, ..$parameters)"""
   }
 
   def apply(key: String, parameters: Any*): String = macro impl

@@ -56,8 +56,8 @@ object I18NFixer {
     val updates = resolutions.collect{ case u: UpdateTranslation => u}.toList.sortBy(_.line)
     val additions = resolutions.collect{ case d: DefineTranslation => d}.toList.sortBy(_.key)
 
-    println(s"All problems in ${scala.Console.GREEN}${file.name}${scala.Console.RESET} have found a solution")
-    println(s"Here are the modifications we're about to perform on ${file.name}")
+    println(s"All problems in ${green(file.name)} have found a solution")
+    println(s"Here are the modifications we're about to perform on ${green(file.name)}")
 
     val lines = Source.fromFile(file).getLines().toList
     val padder = pad(padding(lines.size + additions.size))(_)
@@ -106,11 +106,17 @@ object I18NFixer {
     out.close()
   }
 
+  def color(color: String)(s: String) = color + s + scala.Console.RESET
+  val blue = color(scala.Console.BLUE)(_)
+  val green = color(scala.Console.GREEN)(_)
+  val red = color(scala.Console.RED)(_)
+
   def fixProblem(file: File, problem: TranslationProblem) : Command = problem match {
     case MissingTranslation(key) =>
+      println(s"The translation ${blue(key)} is used in the code but not defined in ${green(file.name)}")
       defineKey(key)
     case WrongNumberOfArguments(key, pattern, expectedMin, actual, line) =>
-      println(s"The definition of $key has $actual parameters but it is used in the code with $expectedMin parameters")
+      println(s"The definition of ${blue(key)} has ${red(actual.toString)} parameters but it is used in the code with ${green(expectedMin.toString)} parameters")
       reportLine(file, line)
       modifyKey(key, line, pattern)
   }
