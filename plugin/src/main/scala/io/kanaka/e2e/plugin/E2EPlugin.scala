@@ -1,6 +1,6 @@
 package io.kanaka.e2e.plugin
 
-import io.kanaka.e2e.plugin.checker.{TranslationProblem, ConsistencyChecker}
+import io.kanaka.e2e.plugin.checker.{I18NFixer, TranslationProblem, ConsistencyChecker}
 import sbt.Keys._
 import sbt._
 /**
@@ -15,6 +15,7 @@ object E2EPlugin extends AutoPlugin {
 
     lazy val checkI18N = TaskKey[Map[File, Set[TranslationProblem]]]("checkI18N", "Verifies that keys used in the code are defined in the translation files")
 
+    lazy val fixI18N = TaskKey[Unit]("fixI18N", "Interactively fix missing/misused transations")
   }
 
   import autoImport._
@@ -26,9 +27,11 @@ object E2EPlugin extends AutoPlugin {
     e2eDirectory := resourceManaged.value / ".e2e",
     scalacOptions += s"-Xmacro-settings:${e2eDirectory.value.absolutePath}",
     libraryDependencies += "io.kanaka" %% "e2e-core" % "0.1-SNAPSHOT",
-    checkI18N := ConsistencyChecker.undefinedKeys(e2eDirectory.value / "key_usages", (resources in Compile).value),
-    checkI18N <<= checkI18N dependsOn (compile in Compile)
+    checkI18N := ConsistencyChecker.verifyAllTranslationFiles(e2eDirectory.value / "key_usages", (resources in Compile).value),
+    checkI18N <<= checkI18N dependsOn (compile in Compile),
+    fixI18N := I18NFixer.run(checkI18N.value)
   )
+
 
 
 
