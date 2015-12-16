@@ -1,5 +1,7 @@
 # e2e
 
+[![Build Status](https://travis-ci.org/Kanaka-io/e2e.svg?branch=master)](https://travis-ci.org/Kanaka-io/e2e)
+
 e2e is the contraction of "ease", like i18n is the contraction of "internationalization".
 
 It is a sbt plugin that helps you keep your i18n files in sync with your code.

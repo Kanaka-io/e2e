@@ -1,6 +1,6 @@
 package io.kanaka.e2e.plugin
 
-import io.kanaka.e2e.plugin.checker.{I18NFixer, TranslationProblem, ConsistencyChecker}
+import io.kanaka.e2e.plugin.checker._
 import sbt.Keys._
 import sbt._
 /**
@@ -13,7 +13,7 @@ object E2EPlugin extends AutoPlugin {
 
     lazy val e2eDirectory: SettingKey[File] = SettingKey[File]("e2eDirectory")
 
-    lazy val checkI18N = TaskKey[Map[File, Set[TranslationProblem]]]("checkI18N", "Verifies that keys used in the code are defined in the translation files")
+    lazy val checkI18N = TaskKey[ConsistencyChecker.ConsistencyCheck]("checkI18N", "Verifies that keys used in the code are defined in the translation files")
 
     lazy val fixI18N = TaskKey[Unit]("fixI18N", "Interactively fix missing/misused transations")
   }

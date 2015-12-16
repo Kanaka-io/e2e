@@ -1,7 +1,7 @@
 package io.kanaka.e2e.plugin.checker
 
 import scala.util.parsing.combinator.RegexParsers
-import scala.util.parsing.input.{CharSequenceReader, Positional}
+import scala.util.parsing.input.{NoPosition, CharSequenceReader, Positional, Position}
 
 /*
     The code below is shamelessly copied from Play sourcecode.
@@ -11,8 +11,12 @@ trait MessageSource {
   def read: String
 }
 
-case class Message(key: String, pattern: String, source: MessageSource, sourceName: String) extends Positional
-
+case class Message(key: String, pattern: String, source: MessageSource, sourceName: String) extends Positional {
+  def atPos(position: Option[Position]) = {
+    pos = position.getOrElse(NoPosition)
+    this
+  }
+}
 
 /**
   * Message file Parser.

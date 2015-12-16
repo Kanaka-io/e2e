@@ -14,7 +14,11 @@ lazy val core = project.in(file("core")).settings(
 lazy val plugin = project.in(file("plugin")).settings(
   name := "e2e-plugin",
   scalaVersion := "2.10.4",
-  sbtPlugin := true
+  sbtPlugin := true,
+  libraryDependencies ++= Seq(
+    "org.specs2" %% "specs2-core" % "3.6.6" % "test"
+  ),
+  scalacOptions in Test ++= Seq("-Yrangepos")
 )
 
 lazy val root = project.in(file(".")).aggregate(core, plugin)

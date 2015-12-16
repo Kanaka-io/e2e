@@ -1,44 +1,43 @@
 package io.kanaka.e2e.plugin.checker
 
-import java.io
-import java.io.{PrintWriter, FileWriter}
+import java.io.{FileWriter, PrintWriter}
+import java.text.MessageFormat
 
 import sbt._
 
+import scala.annotation.tailrec
 import scala.io.Source
-import scala.util.Try
+import scala.util.parsing.input.Position
+import scala.util.{Failure, Success, Try}
 
 /**
   * @author Valentin Kasas
   */
-
-case class Position(file: File, line: Int)
-
 
 object I18NFixer {
 
   sealed trait Command
   case class DefineTranslation(key: String, translation: String) extends Command
   case class UpdateTranslation(key: String, line: Int, was: String, becomes: String) extends Command
+  case object Noop extends Command
 
-  def run(problems: Map[File, Set[TranslationProblem]]): Unit = {
-    val nbProblems =   problems.mapValues(_.size).values.sum
-    intro(nbProblems, problems.size)
-    init(nbProblems, problems)
+  def run(consistencyCheck: ConsistencyChecker.ConsistencyCheck): Unit = {
+    val (reports, usageData) = consistencyCheck
+    val nbProblems = reports.map(_.fold(_ => 1, _.nbProblems)).sum
+    intro(nbProblems, reports.size)
+    init(nbProblems, reports.collect{case Right(report) => report}, usageData)
   }
 
   def intro(nbProblems: Int, nbFiles: Int) : Unit = {
     println(s"We've detected $nbProblems translation problems across the $nbFiles translation files")
   }
 
-  def init(nbProblems: Int, problems: Map[File, Set[TranslationProblem]]): Unit = {
+  def init(nbProblems: Int, problems: Seq[FileAnalysisReport], usageData: UsageData): Unit = {
     if (nbProblems == 0) println("Perfect !")
-    else if (problems.size == 1) fixFile(problems.head._1, problems.head._2)
+    else if (problems.size == 1) fixFile(problems.head, usageData)
     else {
       println("Here are the problematic files")
-      choice(problems.keys.map(f => f.name -> f).toSeq).foreach{ file =>
-        fixFile(file, problems(file))
-      }
+      choice(problems.map(f => f.file.name -> f)).foreach(fixFile(_, usageData))
     }
   }
 
@@ -51,15 +50,14 @@ object I18NFixer {
     Try(cmd.toInt).toOption.filter(idx => idx >= 1 && idx <= items.size).map(idx => items(idx - 1)._2)
   }
 
-  def fixFile(file: File, problems: Set[TranslationProblem]) : Unit = {
-    val resolutions = problems.map(fixProblem(file, _))
-    val updates = resolutions.collect{ case u: UpdateTranslation => u}.toList.sortBy(_.line)
-    val additions = resolutions.collect{ case d: DefineTranslation => d}.toList.sortBy(_.key)
+  def fixFile(report : FileAnalysisReport, usageData: UsageData) : Unit = {
+    val updates = report.content.map(rm => fixDefinition(report.file, rm, usageData.byKey.getOrElse(rm.message.key, Nil)))
+    val additions = defineMissingKeys(report.file, report.missingKeys, usageData)
 
-    println(s"All problems in ${green(file.name)} have found a solution")
-    println(s"Here are the modifications we're about to perform on ${green(file.name)}")
+    println(s"All problems in ${green(report.file.name)} have found a solution")
+    println(s"Here are the modifications we're about to perform on ${green(report.file.name)}")
 
-    val lines = Source.fromFile(file).getLines().toList
+    val lines = Source.fromFile(report.file).getLines().toList
     val padder = pad(padding(lines.size + additions.size))(_)
 
     reportUpdates(updates, padder)
@@ -68,27 +66,27 @@ object I18NFixer {
     val consent = readLine("Shall we proceed [y/N]\n > ")
 
     if (consent == "y") {
-      applyResolution(file, lines, updates, additions)
+      applyResolution(report.file, lines, updates, additions)
     } else {
       println("Aborting")
     }
 
   }
 
-  def reportUpdates(updates: List[UpdateTranslation], padder: Int => String) : Unit = {
+  def reportUpdates(updates: Seq[UpdateTranslation], padder: Int => String) : Unit = {
     updates.foreach{ update =>
       println(sourceFileLine(s"${update.key} = ${update.was}", update.line, padder, Some(scala.Console.RED)))
       println(sourceFileLine(s"${update.key} = ${update.becomes}", update.line, padder, Some(scala.Console.GREEN)))
     }
   }
 
-  def reportAdditions(additions: List[DefineTranslation], totalLines: Int, padder: Int => String) : Unit = {
+  def reportAdditions(additions: Seq[DefineTranslation], totalLines: Int, padder: Int => String) : Unit = {
     additions.zipWithIndex.foreach{ case (addition, i) =>
       println(sourceFileLine(s"${addition.key} = ${addition.translation}", i + totalLines, padder, Some(scala.Console.GREEN)))
     }
   }
 
-  def applyResolution(file: File, lines: List[String],  updates: List[UpdateTranslation], additions: List[DefineTranslation]) : Unit = {
+  def applyResolution(file: File, lines: List[String],  updates: Seq[UpdateTranslation], additions: Seq[DefineTranslation]) : Unit = {
     val sortedUpdates = updates.map{
       update => (update.line - 1) -> s"${update.key} = ${update.becomes}"
     }.toMap
@@ -111,15 +109,33 @@ object I18NFixer {
   val green = color(scala.Console.GREEN)(_)
   val red = color(scala.Console.RED)(_)
 
-  def fixProblem(file: File, problem: TranslationProblem) : Command = problem match {
-    case MissingTranslation(key) =>
-      println(s"The translation ${blue(key)} is used in the code but not defined in ${green(file.name)}")
-      defineKey(key)
-    case WrongNumberOfArguments(key, pattern, expectedMin, actual, line) =>
-      println(s"The definition of ${blue(key)} has ${red(actual.toString)} parameters but it is used in the code with ${green(expectedMin.toString)} parameters")
-      reportLine(file, line)
-      modifyKey(key, line, pattern)
+  def reportProblem(key: String, problem: ConsistencyProblem): Unit = {
+    problem match {
+      case UnusedTranslation =>
+        println(s" * The translation ${blue(key)} is defined but never used")
+      case WrongNumberOfArguments(pattern, expectedMin, actual) =>
+        println(s" * The definition of ${blue(key)} has ${red(actual.toString)} parameters but it is used in the code with ${green(expectedMin.toString)} parameters")
+      case PatternParseError(raw, err) =>
+        println(s" * The pattern '${red(raw)}' could not be parsed. The error was : $err")
+      case SuspiciousQuotesInPattern(pattern, indices) =>
+        println(" * There are suspicious single quotes in the pattern")
+    }
   }
+
+  def fixDefinition(file: File, problem: RichMessage, usages: List[KeyUsage]) : UpdateTranslation = {
+    println(s"We've detected ${red(problem.problems.size.toString)} problems in the definition for ${blue(problem.message.key)}")
+    problem.problems.foreach(p => reportProblem(problem.message.key, p))
+    reportLine(file, problem.message.pos.line)
+    fix(UpdateTranslation(_, problem.message.pos.line, problem.message.pattern, _))(problem.message.key, usages)
+  }
+
+  def defineMissingKeys(file: File, missingKeys: Set[String], usageData: UsageData): Seq[DefineTranslation] = {
+    missingKeys.toList.sorted.map{ key =>
+      println(s"The translation ${blue(key)} is used in the code but not defined in ${green(file.name)}")
+      fix(DefineTranslation)(key, usageData.byKey.getOrElse(key, Nil))
+    }
+  }
+
 
   def padding(max: Int) = Math.log10(max).toInt + 1
 
@@ -144,13 +160,33 @@ object I18NFixer {
     }
   }
 
-  def defineKey(key: String): Command = {
-    val translation = readLine(s"$key = ")
-    DefineTranslation(key, translation)
+  @tailrec
+  def fix[C <: Command](cmd: (String, String) => C)(key: String, usages: List[KeyUsage]): C = {
+    readTranslation(key, 0, usages) match {
+      case Left(err) =>
+        reportProblem(key, err)
+        fix(cmd)(key, usages)
+      case Right(t) =>
+        if(t.problems.nonEmpty) {
+          t.problems.foreach(reportProblem(key, _))
+          fix(cmd)(key, usages)
+        } else {
+          cmd(key, t.message.pattern)
+        }
+    }
   }
 
-  def modifyKey(key: String, line: Int, was: String): Command = {
-    val newTranslation = readLine(s"$key = ")
-    UpdateTranslation(key, line, was, newTranslation)
+
+  val session = new MessageSource {
+    override def read: String = ""
+  }
+
+  def readTranslation(key: String, line: Int, usages: List[KeyUsage], originalPosition: Option[Position] = None): Either[ConsistencyProblem, RichMessage] = {
+    val input = readLine(s"$key = ")
+    Pattern.parse(input).right.map{ pattern =>
+      val msg = Message(key, input, session, "input").atPos(originalPosition)
+      val problems = ConsistencyChecker.validateMessage(msg, usages)
+      RichMessage(msg, problems)
+    }
   }
 }
