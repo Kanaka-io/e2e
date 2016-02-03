@@ -2,3 +2,5 @@
  
  jdk:
    - oraclejdk8
+
+script: sbt test
